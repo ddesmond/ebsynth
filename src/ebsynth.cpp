@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cmath>
+#include <fstream>
 
 EBSYNTH_API
 void ebsynthRun(int    ebsynthBackend,
@@ -259,6 +260,8 @@ int main(int argc,char** argv)
     printf("  -patchmatchiters <number>\n");
     printf("  -stopthreshold <value>\n");
     printf("  -extrapass3x3\n");
+    printf("  -styleaux <styleaux.png>\n");
+	printf("  -outnnf <outnnf.txt>\n");
     printf("  -backend [cpu|cuda]\n");
     printf("\n");
     return 1;
@@ -267,6 +270,7 @@ int main(int argc,char** argv)
   std::string styleFileName;
   float       styleWeight = -1;
   std::string outputFileName = "output.png";
+  std::string styleAuxFileName = "";
 
   struct Guide
   {
@@ -294,6 +298,7 @@ int main(int argc,char** argv)
   int numPatchMatchIters = 4;
   int stopThreshold = 5;
   int extraPass3x3 = 0;
+  std::string outNnfFileName = "";
   int backend = ebsynthBackendAvailable(EBSYNTH_BACKEND_CUDA) ? EBSYNTH_BACKEND_CUDA : EBSYNTH_BACKEND_CPU;
 
   {
@@ -369,6 +374,7 @@ int main(int argc,char** argv)
       }
       else if (tryToParseStringArg(args,&argi,"-backend",&backendName,&fail))
       {
+		std::transform(backendName.begin(), backendName.end(), backendName.begin(), ::tolower);
         if      (backendName=="cpu" ) { backend = EBSYNTH_BACKEND_CPU; }
         else if (backendName=="cuda") { backend = EBSYNTH_BACKEND_CUDA; }
         else { printf("error: unrecognized backend '%s'\n",backendName.c_str()); return 1; }
@@ -381,7 +387,13 @@ int main(int argc,char** argv)
       {
         extraPass3x3 = 1;
         argi++;
-      }
+      }else if (tryToParseStringArg(args, &argi, "-styleaux", &styleAuxFileName, &fail))
+	  {
+		  argi++;
+	  }else if (tryToParseStringArg(args, &argi, "-outnnf", &outNnfFileName, &fail))
+	  {
+		  argi++;
+	  }
       else
       {
         printf("error: unrecognized option '%s'\n",args[argi].c_str());
@@ -400,14 +412,38 @@ int main(int argc,char** argv)
   unsigned char* sourceStyleData = tryLoad(styleFileName,&sourceWidth,&sourceHeight);
   const int numStyleChannelsTotal = evalNumChannels(sourceStyleData,sourceWidth*sourceHeight);
 
-  std::vector<unsigned char> sourceStyle(sourceWidth*sourceHeight*numStyleChannelsTotal);
+  int numStyleAuxChannelsTotal = 0;
+  unsigned char* sourceStyleAuxData = NULL;
+  if (!styleAuxFileName.empty())
+  {
+    int w = 0;
+    int h = 0;
+	sourceStyleAuxData = tryLoad(styleAuxFileName, &w, &h);
+	if (sourceWidth != w || sourceHeight != h) 
+	{
+	  printf("error: --style and --styleaux must match in size\n");
+	  return 1;
+	}
+	numStyleAuxChannelsTotal = evalNumChannels(sourceStyleAuxData, w*h);
+  }
+
+  const int numStyleWithAuxChannels = numStyleChannelsTotal + numStyleAuxChannelsTotal;
+
+  std::vector<unsigned char> sourceStyle(sourceWidth*sourceHeight*(numStyleChannelsTotal + numStyleAuxChannelsTotal));
   for(int xy=0;xy<sourceWidth*sourceHeight;xy++)
   {
-    if      (numStyleChannelsTotal>0)  { sourceStyle[xy*numStyleChannelsTotal+0] = sourceStyleData[xy*4+0]; }
-    if      (numStyleChannelsTotal==2) { sourceStyle[xy*numStyleChannelsTotal+1] = sourceStyleData[xy*4+3]; }           
-    else if (numStyleChannelsTotal>1)  { sourceStyle[xy*numStyleChannelsTotal+1] = sourceStyleData[xy*4+1]; }
-    if      (numStyleChannelsTotal>2)  { sourceStyle[xy*numStyleChannelsTotal+2] = sourceStyleData[xy*4+2]; }
-    if      (numStyleChannelsTotal>3)  { sourceStyle[xy*numStyleChannelsTotal+3] = sourceStyleData[xy*4+3]; }                 
+	// add style channels to sourceStyle
+	if      (numStyleChannelsTotal>0)  { sourceStyle[xy*numStyleWithAuxChannels +0] = sourceStyleData[xy*4+0]; }
+    if      (numStyleChannelsTotal==2) { sourceStyle[xy*numStyleWithAuxChannels +1] = sourceStyleData[xy*4+3]; }
+    else if (numStyleChannelsTotal>1)  { sourceStyle[xy*numStyleWithAuxChannels +1] = sourceStyleData[xy*4+1]; }
+    if      (numStyleChannelsTotal>2)  { sourceStyle[xy*numStyleWithAuxChannels +2] = sourceStyleData[xy*4+2]; }
+    if      (numStyleChannelsTotal>3)  { sourceStyle[xy*numStyleWithAuxChannels +3] = sourceStyleData[xy*4+3]; }
+
+	// add styleAux channels to sourceStyle 
+	if (numStyleAuxChannelsTotal > 0) { sourceStyle[xy*numStyleWithAuxChannels + numStyleChannelsTotal + 0] = sourceStyleAuxData[xy*4+0]; }
+	if (numStyleAuxChannelsTotal > 1) { sourceStyle[xy*numStyleWithAuxChannels + numStyleChannelsTotal + 1] = sourceStyleAuxData[xy*4+1]; }
+	if (numStyleAuxChannelsTotal > 2) { sourceStyle[xy*numStyleWithAuxChannels + numStyleChannelsTotal + 2] = sourceStyleAuxData[xy*4+2]; }
+	if (numStyleAuxChannelsTotal > 3) { sourceStyle[xy*numStyleWithAuxChannels + numStyleChannelsTotal + 3] = sourceStyleAuxData[xy*4+3]; }
   }
   
   int targetWidth = 0;
@@ -431,8 +467,8 @@ int main(int argc,char** argv)
     numGuideChannelsTotal += guide.numChannels;
   }
   
-  if (numStyleChannelsTotal>EBSYNTH_MAX_STYLE_CHANNELS) { printf("error: too many style channels (%d), maximum number is %d\n",numStyleChannelsTotal,EBSYNTH_MAX_STYLE_CHANNELS); return 1; }
-  if (numGuideChannelsTotal>EBSYNTH_MAX_GUIDE_CHANNELS) { printf("error: too many guide channels (%d), maximum number is %d\n",numGuideChannelsTotal,EBSYNTH_MAX_GUIDE_CHANNELS); return 1; }
+  if (numStyleWithAuxChannels>EBSYNTH_MAX_STYLE_CHANNELS) { printf("error: too many style channels (%d), maximum number is %d\n",numStyleWithAuxChannels,EBSYNTH_MAX_STYLE_CHANNELS); return 1; }
+  if (numGuideChannelsTotal>EBSYNTH_MAX_GUIDE_CHANNELS)   { printf("error: too many guide channels (%d), maximum number is %d\n",numGuideChannelsTotal,EBSYNTH_MAX_GUIDE_CHANNELS); return 1; }
 
   std::vector<unsigned char> sourceGuides(sourceWidth*sourceHeight*numGuideChannelsTotal);
   for(int xy=0;xy<sourceWidth*sourceHeight;xy++)
@@ -470,9 +506,9 @@ int main(int argc,char** argv)
     }
   }
 
-  std::vector<float> styleWeights(numStyleChannelsTotal);
+  std::vector<float> styleWeights(numStyleWithAuxChannels);
   if (styleWeight<0) { styleWeight = 1.0f; }
-  for(int i=0;i<numStyleChannelsTotal;i++) { styleWeights[i] = styleWeight / float(numStyleChannelsTotal); }
+  for(int i=0;i< numStyleWithAuxChannels;i++) { styleWeights[i] = styleWeight / float(numStyleWithAuxChannels); }
 
   for(int i=0;i<numGuides;i++) { if (guides[i].weight<0) { guides[i].weight = 1.0f/float(numGuides); } }
 
@@ -515,7 +551,7 @@ int main(int argc,char** argv)
     stopThresholdPerLevel[i] = stopThreshold;
   }
 
-  std::vector<unsigned char> output(targetWidth*targetHeight*numStyleChannelsTotal);
+  std::vector<unsigned char> output(targetWidth*targetHeight*numStyleWithAuxChannels);
 
   printf("uniformity: %.0f\n",uniformityWeight);
   printf("patchsize: %d\n",patchSize);
@@ -525,9 +561,13 @@ int main(int argc,char** argv)
   printf("stopthreshold: %d\n",stopThreshold);
   printf("extrapass3x3: %s\n",extraPass3x3!=0?"yes":"no");
   printf("backend: %s\n",backendToString(backend).c_str());
+  printf("styleChannels: %d\n", numStyleChannelsTotal);
+  printf("styleAuxChannels: %d\n", numStyleAuxChannelsTotal);
+
+  std::vector<int> finalNNF(outNnfFileName.empty() ? 0 : targetWidth*targetHeight * 2);
 
   ebsynthRun(backend,
-             numStyleChannelsTotal,
+			 numStyleWithAuxChannels,
              numGuideChannelsTotal,
              sourceWidth,
              sourceHeight,
@@ -547,11 +587,37 @@ int main(int argc,char** argv)
              numPatchMatchItersPerLevel.data(),
              stopThresholdPerLevel.data(),
              extraPass3x3,
-             NULL,
+			 outNnfFileName.empty() ? NULL : finalNNF.data(), // col, row
              output.data());
 
-  stbi_write_png(outputFileName.c_str(),targetWidth,targetHeight,numStyleChannelsTotal,output.data(),numStyleChannelsTotal*targetWidth);
+  if(numStyleAuxChannelsTotal > 0) // save without styleAux channels
+  {
+    std::vector<unsigned char> outputWithoutAux(sourceWidth*sourceHeight*numStyleChannelsTotal);
+    for (int xy = 0; xy < sourceWidth*sourceHeight; xy++)
+	{
+	  if (numStyleChannelsTotal > 0) { outputWithoutAux[xy*numStyleChannelsTotal + 0] = output[xy*numStyleWithAuxChannels + 0]; }
+	  if (numStyleChannelsTotal > 1) { outputWithoutAux[xy*numStyleChannelsTotal + 1] = output[xy*numStyleWithAuxChannels + 1]; }
+	  if (numStyleChannelsTotal > 2) { outputWithoutAux[xy*numStyleChannelsTotal + 2] = output[xy*numStyleWithAuxChannels + 2]; }
+	  if (numStyleChannelsTotal > 3) { outputWithoutAux[xy*numStyleChannelsTotal + 3] = output[xy*numStyleWithAuxChannels + 3]; }
+    }
+	stbi_write_png(outputFileName.c_str(), targetWidth, targetHeight, numStyleChannelsTotal, outputWithoutAux.data(), numStyleChannelsTotal*targetWidth);
+  }
+  else
+  {
+    stbi_write_png(outputFileName.c_str(), targetWidth, targetHeight, numStyleChannelsTotal, output.data(), numStyleChannelsTotal*targetWidth);
+  }
 
+  if(!outNnfFileName.empty())
+  {
+	std::ofstream ofs(outNnfFileName, std::ofstream::out);
+    for (int finalNNFIndex = 0; finalNNFIndex < finalNNF.size(); finalNNFIndex += 2)
+	{
+	  ofs << finalNNF[finalNNFIndex + 1] << " " << finalNNF[finalNNFIndex] << " ";
+	}
+	ofs.close();
+	printf("final nnf was written to %s\n", outNnfFileName.c_str());
+  }
+  
   printf("result was written to %s\n",outputFileName.c_str());
 
   stbi_image_free(sourceStyleData);

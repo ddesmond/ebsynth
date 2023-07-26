@@ -1,3 +1,7 @@
+#### Please note, this repository is a fork with just a few changes; all credit goes to Ondrej Jamriska, CTU in Prague, https://github.com/jamriska/ebsynth
+
+
+
 # Ebsynth: A Fast Example-based Image Synthesizer
 
 `ebsynth` is a versatile tool for by-example synthesis of images.
@@ -30,6 +34,7 @@ ebsynth -style <style.png> -guide <source.png> <target.png> -output <output.png>
 -patchmatchiters <number>
 -extrapass3x3
 -backend [cpu|cuda]
+-outnnf <output.nnf>
 ```
 
 ## Download

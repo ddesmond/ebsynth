@@ -1182,19 +1182,28 @@ void ebsynthRunCuda(int    numStyleChannels,
 int ebsynthBackendAvailableCuda()
 {
   int deviceCount = -1;
-  if (cudaGetDeviceCount(&deviceCount)!=cudaSuccess) { return 0; }
+  if (cudaGetDeviceCount(&deviceCount)!=cudaSuccess) { 
+    printf("Failed to get CUDA device count\n");
+    return 0; 
+  }
+  printf("Number of CUDA devices: %d\n", deviceCount);
 
   for (int device=0;device<deviceCount;device++)
   {
     cudaDeviceProp properties;
     if (cudaGetDeviceProperties(&properties,device)==cudaSuccess)
     {
+      printf("Device %d compute capability: %d.%d\n", device, properties.major, properties.minor);
       if (properties.major!=9999 && properties.major>=3)
       {
         return 1;
       }
     }
+    else {
+      printf("Failed to get properties for device %d\n", device);
+    }
   }
 
   return 0;
 }
+
