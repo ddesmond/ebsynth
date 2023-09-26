@@ -26,7 +26,8 @@ void ebsynthRunCpu(int    numStyleChannels,
                    int*   stopThresholdPerLevel,
                    int    extraPass3x3,
                    void*  outputNnfData,
-                   void*  outputImageData);
+                   void*  outputImageData,
+		   void*  outputErrorData);
 
 int ebsynthBackendAvailableCpu();
 

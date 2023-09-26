@@ -766,7 +766,8 @@ void ebsynthCuda(int    numStyleChannels,
                  int*   stopThresholdPerLevel,
                  int    extraPass3x3,
                  void*  outputNnfData,
-                 void*  outputImageData)
+                 void*  outputImageData,
+		 void*  outputErrorData)
 {
   const int levelCount = numPyramidLevels;
 
@@ -1067,6 +1068,7 @@ void ebsynthCuda(int    numStyleChannels,
     {      
       if (outputNnfData!=NULL) { copy(&outputNnfData,pyramid[level].NNF); }
       copy(&outputImageData,pyramid[level].targetStyle);
+      copy(&outputErrorData,pyramid[level].E);
     }
 
     if ((level<levelCount-1) ||
@@ -1121,9 +1123,10 @@ void ebsynthRunCuda(int    numStyleChannels,
                     int*   stopThresholdPerLevel,
                     int    extraPass3x3,
                     void*  outputNnfData,
-                    void*  outputImageData)
+                    void*  outputImageData,
+                    void*  outputErrorData)
 {
-  void (*const dispatchEbsynth[EBSYNTH_MAX_GUIDE_CHANNELS][EBSYNTH_MAX_STYLE_CHANNELS])(int,int,int,int,void*,void*,int,int,void*,void*,float*,float*,float,int,int,int,int*,int*,int*,int,void*,void*) =
+  void (*const dispatchEbsynth[EBSYNTH_MAX_GUIDE_CHANNELS][EBSYNTH_MAX_STYLE_CHANNELS])(int,int,int,int,void*,void*,int,int,void*,void*,float*,float*,float,int,int,int,int*,int*,int*,int,void*,void*, void*) =
   {
     { ebsynthCuda<1, 1>, ebsynthCuda<2, 1>, ebsynthCuda<3, 1>, ebsynthCuda<4, 1>, ebsynthCuda<5, 1>, ebsynthCuda<6, 1>, ebsynthCuda<7, 1>, ebsynthCuda<8, 1> },
     { ebsynthCuda<1, 2>, ebsynthCuda<2, 2>, ebsynthCuda<3, 2>, ebsynthCuda<4, 2>, ebsynthCuda<5, 2>, ebsynthCuda<6, 2>, ebsynthCuda<7, 2>, ebsynthCuda<8, 2> },
@@ -1175,35 +1178,27 @@ void ebsynthRunCuda(int    numStyleChannels,
                                                             stopThresholdPerLevel,
                                                             extraPass3x3,
                                                             outputNnfData,
-                                                            outputImageData);
+                                                            outputImageData,
+                                                            outputErrorData);
   }
 }
 
 int ebsynthBackendAvailableCuda()
 {
   int deviceCount = -1;
-  if (cudaGetDeviceCount(&deviceCount)!=cudaSuccess) { 
-    printf("Failed to get CUDA device count\n");
-    return 0; 
-  }
-  printf("Number of CUDA devices: %d\n", deviceCount);
+  if (cudaGetDeviceCount(&deviceCount)!=cudaSuccess) { return 0; }
 
   for (int device=0;device<deviceCount;device++)
   {
     cudaDeviceProp properties;
     if (cudaGetDeviceProperties(&properties,device)==cudaSuccess)
     {
-      printf("Device %d compute capability: %d.%d\n", device, properties.major, properties.minor);
       if (properties.major!=9999 && properties.major>=3)
       {
         return 1;
       }
     }
-    else {
-      printf("Failed to get properties for device %d\n", device);
-    }
   }
 
   return 0;
 }
-
