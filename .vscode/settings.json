@@ -1,0 +1,9 @@
+{
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "*.py": "python",
+        "xstring": "cpp",
+        "vector": "cpp",
+        "stdexcept": "cpp"
+    }
+}

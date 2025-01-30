@@ -683,7 +683,8 @@ void ebsynthCpu(int    numStyleChannels,
                 int*   stopThresholdPerLevel,
                 int    extraPass3x3,
                 void*  outputNnfData,
-                void*  outputImageData)
+                void*  outputImageData,
+		void*  outputErrorData)
 {
   const int levelCount = numPyramidLevels;
 
@@ -959,6 +960,7 @@ void ebsynthCpu(int    numStyleChannels,
     {      
       if (outputNnfData!=NULL) { copy(&outputNnfData,pyramid[level].NNF); }
       copy(&outputImageData,pyramid[level].targetStyle);
+      copy(&outputErrorData,pyramid[level].E);
     }
 
     if ((level<levelCount-1) ||
@@ -1011,9 +1013,10 @@ void ebsynthRunCpu(int    numStyleChannels,
                    int*   stopThresholdPerLevel,
                    int    extraPass3x3,
                    void*  outputNnfData,
-                   void*  outputImageData)
+                   void*  outputImageData,
+		   void*  outputErrorData)
 {
-  void (*const dispatchEbsynth[EBSYNTH_MAX_GUIDE_CHANNELS][EBSYNTH_MAX_STYLE_CHANNELS])(int,int,int,int,void*,void*,int,int,void*,void*,float*,float*,float,int,int,int,int*,int*,int*,int,void*,void*) =
+  void (*const dispatchEbsynth[EBSYNTH_MAX_GUIDE_CHANNELS][EBSYNTH_MAX_STYLE_CHANNELS])(int,int,int,int,void*,void*,int,int,void*,void*,float*,float*,float,int,int,int,int*,int*,int*,int,void*,void*,void*) =
   {
     { ebsynthCpu<1, 1>, ebsynthCpu<2, 1>, ebsynthCpu<3, 1>, ebsynthCpu<4, 1>, ebsynthCpu<5, 1>, ebsynthCpu<6, 1>, ebsynthCpu<7, 1>, ebsynthCpu<8, 1> },
     { ebsynthCpu<1, 2>, ebsynthCpu<2, 2>, ebsynthCpu<3, 2>, ebsynthCpu<4, 2>, ebsynthCpu<5, 2>, ebsynthCpu<6, 2>, ebsynthCpu<7, 2>, ebsynthCpu<8, 2> },
@@ -1065,7 +1068,8 @@ void ebsynthRunCpu(int    numStyleChannels,
                                                             stopThresholdPerLevel,
                                                             extraPass3x3,
                                                             outputNnfData,
-                                                            outputImageData);
+                                                            outputImageData,
+							    outputErrorData);
   }
 }
 

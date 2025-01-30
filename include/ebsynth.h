@@ -66,8 +66,9 @@ void ebsynthRun(int    ebsynthBackend,             // use BACKEND_CUDA for maxim
                 int    extraPass3x3,               // perform additional polishing pass with 3x3 patches at the finest level, use 0 to disable
                 
                 void*  outputNnfData,              // (width * height * 2) ints, scan-line order; pass NULL to ignore
-                void*  outputImageData             // (width * height * numStyleChannels) bytes, scan-line order
-                );
+                void*  outputImageData,             // (width * height * numStyleChannels) bytes, scan-line order
+        	void*  outputErrorData // (width * height) bytes    
+		);
 
 #ifdef __cplusplus
 }
